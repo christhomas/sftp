@@ -448,6 +448,51 @@ func TestClientReadDirSuccess(t *testing.T) {
 	}
 }
 
+// Issue #424 in github
+// Some servers return the same handle for every open.
+func TestClientDuplicateHandle(t *testing.T) {
+	var closes int
+	c := startScriptedClient(t, func(typ fxp, id uint32) (fxp, []byte, bool) {
+		switch typ {
+		case sshFxpOpen, sshFxpOpendir:
+			return sshFxpHandle, marshalString(marshalUint32(nil, id), "handle"), true
+		case sshFxpClose:
+			closes++
+			return sshFxpStatus, statusBody(marshalUint32(nil, id), sshFxOk), true
+		default:
+			return 0, nil, false
+		}
+	})
+	defer c.Close()
+
+	f, err := c.Open("/a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Open("/b"); err == nil {
+		t.Error("expected error opening a file with a handle that is already open")
+	}
+	if _, err := c.ReadDir("/"); err == nil {
+		t.Error("expected error opening a directory with a handle that is already open")
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// The handle can be used again once it has been closed.
+	f, err = c.Open("/b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	if closes != 2 {
+		t.Errorf("got %d close requests, want 2", closes)
+	}
+}
+
 // Issue #418: panic in clientConn.recv when the sid is incomplete.
 func TestClientNoSid(t *testing.T) {
 	stream := new(bytes.Buffer)

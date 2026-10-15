@@ -181,6 +181,9 @@ type Client struct {
 
 	ext map[string]string // Extensions (name -> data).
 
+	handlesMu sync.Mutex
+	handles   map[string]struct{} // Handles of open files and directories.
+
 	maxPacket             int // max packet size read or written.
 	maxConcurrentRequests int
 	nextid                uint32
@@ -239,7 +242,8 @@ func newClientPipe(rd, stderr io.Reader, wr io.WriteCloser, wait func() error, o
 			wait:     wait,
 		},
 
-		ext: make(map[string]string),
+		ext:     make(map[string]string),
+		handles: make(map[string]struct{}),
 
 		maxPacket:             1 << 15,
 		maxConcurrentRequests: 64,
@@ -457,6 +461,9 @@ func (c *Client) opendir(ctx context.Context, path string) (string, error) {
 		}
 		handle, _, err := unmarshalStringSafe(data)
 		if err != nil {
+			return "", err
+		}
+		if err := c.addHandle(handle); err != nil {
 			return "", err
 		}
 		return handle, nil
@@ -704,6 +711,9 @@ func (c *Client) open(path string, pflags uint32) (*File, error) {
 		if err != nil {
 			return nil, err
 		}
+		if err := c.addHandle(handle); err != nil {
+			return nil, err
+		}
 		return &File{c: c, path: path, handle: handle}, nil
 	case sshFxpStatus:
 		return nil, normaliseError(unmarshalStatus(id, data))
@@ -716,6 +726,12 @@ func (c *Client) open(path string, pflags uint32) (*File, error) {
 // to SSH_FXP_OPEN or SSH_FXP_OPENDIR. The handle becomes invalid
 // immediately after this request has been sent.
 func (c *Client) close(handle string) error {
+	// Forget the handle before sending the request: once the server has
+	// processed it, the server may return the same handle to another open.
+	c.handlesMu.Lock()
+	delete(c.handles, handle)
+	c.handlesMu.Unlock()
+
 	id := c.nextID()
 	typ, data, err := c.sendPacket(context.Background(), nil, &sshFxpClosePacket{
 		ID:     id,
@@ -730,6 +746,20 @@ func (c *Client) close(handle string) error {
 	default:
 		return unimplementedPacketErr(typ)
 	}
+}
+
+// addHandle records handle as open. It returns an error if the handle is
+// already open: some servers return the same handle for every open, and
+// using it would also read, write or close the other file.
+func (c *Client) addHandle(handle string) error {
+	c.handlesMu.Lock()
+	defer c.handlesMu.Unlock()
+
+	if _, ok := c.handles[handle]; ok {
+		return fmt.Errorf("sftp: server returned handle %q which is already open", handle)
+	}
+	c.handles[handle] = struct{}{}
+	return nil
 }
 
 func (c *Client) stat(path string) (*FileStat, error) {
