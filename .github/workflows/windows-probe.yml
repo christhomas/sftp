@@ -20,6 +20,7 @@ jobs:
       - name: Run tests
         shell: bash
         run: |
+          set +e
           for flags in "" "-integration" "-testserver" "-integration -testserver"; do
             echo "::group::go test $flags"
             go test -count=1 -timeout 10m -v $flags . > "out$(echo $flags | tr -d ' -').log" 2>&1
@@ -45,6 +46,7 @@ jobs:
       - name: Run tests
         shell: bash
         run: |
+          set +e
           go test -count=1 -timeout 10m ./... 2>&1 | tail -20
           cd localfs
           for flags in "-testserver=true" "-testserver=false"; do
