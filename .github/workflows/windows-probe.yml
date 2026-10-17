@@ -29,7 +29,7 @@ jobs:
             echo "::endgroup::"
           done
           echo "== failing tests per mode"
-          for f in out*.log; do echo "-- $f"; grep -E -A3 -- '--- FAIL' "$f" | head -200; done
+          for f in out*.log; do echo "-- $f"; grep -E -B8 -- '--- FAIL' "$f" | head -400; done
 
   v2:
     runs-on: windows-latest
@@ -53,5 +53,5 @@ jobs:
             echo "== localfs $flags"
             go test -count=1 -timeout 10m -v -tags=integration,sftp.sync.metrics $flags . > out.log 2>&1
             echo "exit $?"
-            grep -E -A3 -- '^(--- FAIL|FAIL|ok|panic)' out.log | head -200
+            grep -E -B8 -- '--- FAIL' out.log | head -200
           done
