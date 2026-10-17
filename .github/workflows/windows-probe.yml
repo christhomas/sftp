@@ -5,53 +5,21 @@ on:
     branches: [windows-probe]
 
 jobs:
-  v1:
+  v2-windows-ci:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          repository: pkg/sftp
-          ref: master
+          repository: christhomas/sftp
+          ref: v2-windows-ci
 
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.26'
+          go-version: '1.24'
 
       - name: Run tests
         shell: bash
         run: |
-          set +e
-          for flags in "" "-integration" "-testserver" "-integration -testserver"; do
-            echo "::group::go test $flags"
-            go test -count=1 -timeout 10m -v $flags . > "out$(echo $flags | tr -d ' -').log" 2>&1
-            echo "exit $?"
-            grep -E '^(--- FAIL|FAIL|ok|panic)' "out$(echo $flags | tr -d ' -').log" | head -100
-            echo "::endgroup::"
-          done
-          echo "== failing tests per mode"
-          for f in out*.log; do echo "-- $f"; grep -E -B8 -- '--- FAIL' "$f" | head -400; done
-
-  v2:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          repository: pkg/sftp
-          ref: dev-v2
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.26'
-
-      - name: Run tests
-        shell: bash
-        run: |
-          set +e
-          go test -count=1 -timeout 10m ./... 2>&1 | tail -20
+          go test -v -tags=integration,sftp.sync.metrics ./...
           cd localfs
-          for flags in "-testserver=true" "-testserver=false"; do
-            echo "== localfs $flags"
-            go test -count=1 -timeout 10m -v -tags=integration,sftp.sync.metrics $flags . > out.log 2>&1
-            echo "exit $?"
-            grep -E -B8 -- '--- FAIL' out.log | head -200
-          done
+          go test -v -tags=integration,sftp.sync.metrics -testserver=false
