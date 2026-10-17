@@ -875,7 +875,7 @@ func (cl *Client) Remove(name string) error {
 
 // RemoveAll removes path and any children it contains.
 // It removes everything it can but returns the first error it encounters.
-// f the path does not exist, RemoveAll returns nil (no error).
+// If the path does not exist, RemoveAll returns nil (no error).
 // If there is an error, it will be of type *PathError.
 func (cl *Client) RemoveAll(pathname string) error {
 	fi, err := cl.Stat(pathname)
@@ -909,7 +909,7 @@ func (cl *Client) RemoveAll(pathname string) error {
 		}
 	}
 
-	return nil
+	return cl.Remove(pathname)
 }
 
 func (cl *Client) setstat(ctx context.Context, name string, attrs *sshfx.Attributes) error {
