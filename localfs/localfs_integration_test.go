@@ -725,16 +725,16 @@ func TestReadFrom(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() {
-		t.Log("close: client-readfrom.go")
-
-		if err := f.Close(); err != nil {
-			t.Error(err)
-		}
-	}()
 
 	n, err := f.ReadFrom(bytes.NewReader(clData))
 	if err != nil {
+		f.Close()
+		t.Fatal(err)
+	}
+
+	// Close the file before reading it back:
+	// on Windows, the server process may not allow reading a file it still has open for writing.
+	if err := f.Close(); err != nil {
 		t.Fatal(err)
 	}
 
